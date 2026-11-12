@@ -8,7 +8,7 @@ const OWNER_NICK = 'Profi_7783', OWNER = OWNER_NICK.toLowerCase();
 const OWNER_PASS = '201414';   // пароль владельца Profi_7783. Хочешь поменять, измени цифры здесь
 const FILE = process.env.DATA_FILE || './data.json';
 
-let db = { accounts: {}, sessions: {}, perks: {}, news: [], votes: {}, chat: [] };
+let db = { accounts: {}, sessions: {}, perks: {}, news: [], votes: {}, chat: [], mods: {} };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(FILE, 'utf8')) }; } catch {}
 let pending = 0;
 const save = () => { if (pending) return; pending = 1; setTimeout(() => { pending = 0; fs.writeFile(FILE, JSON.stringify(db), () => {}); }, 1500); };
@@ -28,6 +28,12 @@ const users = () => Object.values(db.accounts).filter(a => a.n.toLowerCase() !==
 const tries = {};
 const limited = ip => { const t = (tries[ip] = (tries[ip] || []).filter(x => Date.now() - x < 60000)); t.push(Date.now()); return t.length > 12; };
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+const regs = {};
+const FOREVER = 253402300799000;
+const left = (k, t) => { const u = (db.mods[k] || {})[t]; return u && u > Date.now() ? u : 0; };
+const myMods = k => { const m = db.mods[k] || {}, o = { reason: m.reason || '' }; for (const t of ['ban', 'mute', 'nonews']) if (left(k, t)) o[t] = m[t]; return o; };
+const allMods = () => { const o = {}; for (const k of Object.keys(db.mods)) { const m = myMods(k); if (m.ban || m.mute || m.nonews) o[k] = m; } return o; };
+const banned = k => left(k, 'ban') ? { ok: 0, banned: 1, until: db.mods[k].ban, reason: db.mods[k].reason || '' } : null;
 
 const srv = http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); s.end('Front of Drones server OK'); });
 const io = new Server(srv, { cors: { origin: ORIGIN === '*' ? '*' : ORIGIN.split(',') } });
@@ -38,8 +44,8 @@ io.on('connection', sock => {
   const ip = (sock.handshake.headers['x-forwarded-for'] || sock.handshake.address || '').split(',')[0];
   const me = () => sock.data.k && db.accounts[sock.data.k];
   const isOwner = () => sock.data.k === OWNER;
-  const snapshot = () => ({ me: pub(me()), owner: isOwner(), perks: db.perks, news: db.news, votes: Object.values(db.votes), chat: db.chat.slice(-80), users: isOwner() ? users() : [] });
-  const enter = k => { sock.data.k = k; sock.join('in'); if (k === OWNER) sock.join('owner'); pushOnline(); };
+  const snapshot = () => ({ me: pub(me()), owner: isOwner(), perks: db.perks, news: db.news, votes: Object.values(db.votes), chat: db.chat.slice(-80), users: isOwner() ? users() : [], my: myMods(sock.data.k), mods: isOwner() ? allMods() : {} });
+  const enter = k => { sock.data.k = k; sock.join('in'); sock.join('u:' + k); if (k === OWNER) sock.join('owner'); pushOnline(); };
 
   const auth = (reg) => (d, cb) => {
     if (typeof cb !== 'function') return;
@@ -50,12 +56,15 @@ io.on('connection', sock => {
     let a = db.accounts[k];
     if (reg) {
       if (a || k === OWNER) return cb({ ok: 0, err: 'Этот ник уже занят' });
-      a = db.accounts[k] = { n, ts: Date.now() }; setPass(a, p);
+      const rl = (regs[ip] = (regs[ip] || []).filter(x => Date.now() - x < 3600000));
+      if (rl.length >= 3) return cb({ ok: 0, err: 'С одного устройства можно создать не больше 3 аккаунтов в час' });
+      a = db.accounts[k] = { n, ts: Date.now() }; setPass(a, p); rl.push(Date.now());
       io.to('owner').emit('users', users());
     } else if (!a || !a.hash || !okPass(a, p)) {
       console.log('Неудачный вход:', k, a ? '(пароль не подошёл)' : '(такого аккаунта нет)');
       return cb({ ok: 0, err: 'Неверный ник или пароль' });
     }
+    const bn = banned(k); if (bn) return cb(bn);
     const t = crypto.randomBytes(24).toString('hex'); db.sessions[sha(t)] = k; save();
     enter(k); cb({ ok: 1, token: t, ...snapshot() });
   };
@@ -66,6 +75,7 @@ io.on('connection', sock => {
     if (typeof cb !== 'function') return;
     const k = db.sessions[sha(String((d && d.t) || ''))];
     if (!k || !db.accounts[k]) return cb({ ok: 0 });
+    const bn = banned(k); if (bn) return cb(bn);
     enter(k); cb({ ok: 1, ...snapshot() });
   });
   sock.on('logout', d => { delete db.sessions[sha(String((d && d.t) || ''))]; save(); });
@@ -79,8 +89,10 @@ io.on('connection', sock => {
 
   sock.on('chat:send', t => {
     const a = me(); t = clean(t, 300);
-    if (!a || !a.tg || !t || Date.now() - (sock.data.last || 0) < 700) return;
-    sock.data.last = Date.now();
+    if (!a || !a.tg || !t || Date.now() - (sock.data.last || 0) < 1200) return;
+    if (t === sock.data.lt && Date.now() - (sock.data.last || 0) < 10000) return;   // одинаковый текст подряд = спам
+    const mu = left(sock.data.k, 'mute'); if (mu) return sock.emit('notice', { t: 'mute', until: mu, reason: (db.mods[sock.data.k] || {}).reason || '' });
+    sock.data.last = Date.now(); sock.data.lt = t;
     const m = { id: Date.now() + '-' + crypto.randomBytes(2).toString('hex'), u: a.n, t, ts: Date.now() };
     db.chat.push(m); if (db.chat.length > 200) db.chat.shift(); save(); io.to('in').emit('chat:new', m);
   });
@@ -101,6 +113,7 @@ io.on('connection', sock => {
 
   sock.on('vote', d => {
     const a = me(); if (!a || !d || !db.news.some(n => n.id === d.nid) || (d.v !== 1 && d.v !== -1)) return;
+    const nn = left(a.n.toLowerCase(), 'nonews'); if (nn) return sock.emit('notice', { t: 'nonews', until: nn, reason: (db.mods[a.n.toLowerCase()] || {}).reason || '' });
     const k = a.n.toLowerCase(), id = d.nid + '_' + k, cur = db.votes[id];
     const v = cur && cur.v === d.v ? 0 : d.v;
     if (v) db.votes[id] = { id, nid: d.nid, k, v }; else delete db.votes[id];
@@ -117,6 +130,26 @@ io.on('connection', sock => {
     if (items.length) db.perks[k] = items; else delete db.perks[k];
     save(); io.to('in').emit('perks:set', { k, items }); cb({ ok: 1 });
   });
+
+  // ----- управление (только владелец) -----
+  sock.on('mod:set', (d, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!isOwner()) return cb({ ok: 0, err: 'Только владелец' });
+    const k = clean(d && d.k, 20).toLowerCase(), t = d && d.t, mins = Number(d && d.mins);
+    if (!db.accounts[k] || k === OWNER) return cb({ ok: 0, err: 'Игрок не найден' });
+    if (!['ban', 'mute', 'nonews'].includes(t) || !Number.isFinite(mins)) return cb({ ok: 0, err: 'Неверные данные' });
+    const m = db.mods[k] || (db.mods[k] = {});
+    if (mins === 0) delete m[t]; else { m[t] = mins < 0 ? FOREVER : Date.now() + Math.min(mins, 2628000) * 60000; m.reason = clean(d.reason, 80); }
+    if (!left(k, 'ban') && !left(k, 'mute') && !left(k, 'nonews')) delete db.mods[k];
+    save();
+    const my = myMods(k);
+    io.to('owner').emit('mods:set', { k, m: my });
+    io.to('u:' + k).emit('my', my);
+    if (t === 'ban' && mins !== 0) for (const [, x] of io.sockets.sockets) if (x.data.k === k) { x.emit('banned', { until: m.ban, reason: m.reason || '' }); setTimeout(() => x.disconnect(true), 400); }
+    cb({ ok: 1 });
+  });
+  sock.on('chat:purge', k => { if (!isOwner()) return; k = clean(k, 20).toLowerCase(); db.chat = db.chat.filter(m => String(m.u).toLowerCase() !== k); save(); io.to('in').emit('chat:purge', k); });
+  sock.on('chat:clear', () => { if (!isOwner()) return; db.chat = []; save(); io.to('in').emit('chat:clear'); });
 
   sock.on('disconnect', () => setTimeout(pushOnline, 200));
 });
