@@ -56,6 +56,7 @@ label.row input{width:24px;min-height:24px;flex:none}
 body{font-size:var(--fs,17px)}
 body.noanim *{animation:none!important;transition:none!important}
 body.notm .m small{display:none}
+select{width:100%;min-height:46px;padding:8px 12px;background:#161816;border:1px solid var(--ln);color:var(--tx);border-radius:4px;font:inherit;font-size:16px}
 </style></head><body>
 <audio id="au" loop preload="auto" src="music.mp3"></audio>
 <div id="splash"><h1 class="camo" style="font-size:2rem">Front of Drones</h1><i></i><p class="mt" id="sp" style="margin:0;text-align:center;padding:0 16px"></p></div>
@@ -77,7 +78,7 @@ body.notm .m small{display:none}
 
 <div id="app" hidden><div class="w">
  <div class="top"><h1 class="camo">Front of Drones</h1><div class="row"><span class="tag" id="onl"></span><span class="tag" id="mode"></span><span id="who"></span></div></div>
- <nav><button data-t="home" class="on">Главная</button><button data-t="news">Новости</button><button data-t="chat">Общение</button><button data-t="perk" id="tp" hidden>Привилегии</button><button data-t="set">Настройки</button></nav>
+ <nav><button data-t="home" class="on">Главная</button><button data-t="news">Новости</button><button data-t="chat">Общение</button><button data-t="perk" id="tp" hidden>Управление</button><button data-t="set">Настройки</button></nav>
  <div style="height:12px"></div>
 
  <section id="v-home"><div class="grid">
@@ -90,14 +91,19 @@ body.notm .m small{display:none}
 
  <section id="v-news" hidden><div class="c" id="nc" hidden><h2>Новая новость</h2><textarea id="nt" maxlength="800" placeholder="Текст новости"></textarea><div style="height:8px"></div><button class="b main" id="np">Опубликовать</button></div><div id="nl"></div></section>
 
- <section id="v-chat" hidden><div class="c"><div id="cl"></div><div class="row" style="margin-top:10px;flex-wrap:nowrap"><input id="ct" maxlength="300" placeholder="Сообщение" autocomplete="off"><button class="b main" id="cs">Отправить</button></div></div></section>
+ <section id="v-chat" hidden><div class="c"><div class="row" id="cadm" hidden style="margin-bottom:8px"><button class="b x" id="cclear">Очистить весь чат</button></div><div id="cl"></div><div class="row" style="margin-top:10px;flex-wrap:nowrap"><input id="ct" maxlength="300" placeholder="Сообщение" autocomplete="off"><button class="b main" id="cs">Отправить</button></div></div></section>
 
  <section id="v-perk" hidden><p class="tag" id="pwarn" style="margin:0 0 10px"></p><div class="grid"><div class="c"><h2>Игроки</h2><input id="q" placeholder="Поиск по нику"><div id="ul" style="margin-top:8px"></div></div>
-  <div class="c" id="pp" hidden><h2>Привилегия для <span id="pn"></span></h2>
+  <div class="c" id="pp" hidden><h2 id="pn" style="margin-bottom:.1em"></h2><h2 style="font-size:1.1rem;margin-top:0">Привилегия</h2>
    <label for="pt">Текст привилегии</label><input id="pt" maxlength="30" placeholder="Например: Командир">
    <label>Цвет</label><div class="row"><input type="color" id="pc" value="#e0a526"><span id="sws" class="row"></span></div>
    <p>Так увидят другие: <span id="pv"></span></p><button class="b main" id="give">Выдать</button>
-   <h2 style="margin-top:18px">Выданные</h2><div id="cur" class="row"></div></div></div></section>
+   <h2 style="margin-top:18px">Выданные</h2><div id="cur" class="row"></div>
+   <h2 style="margin-top:22px;color:#f0a39c">Наказания</h2><div id="mstat" class="row"></div>
+   <label for="md">Срок</label><select id="md"><option value="10">10 минут</option><option value="60">1 час</option><option value="1440" selected>1 день</option><option value="4320">3 дня</option><option value="10080">7 дней</option><option value="43200">30 дней</option><option value="-1">Навсегда</option></select>
+   <label for="mr">Причина (необязательно)</label><input id="mr" maxlength="80" placeholder="Спам">
+   <div class="row" style="margin-top:12px"><button class="b x" data-mod="ban">Забанить</button><button class="b x" data-mod="mute">Мут в чате</button><button class="b x" data-mod="nonews">Блок реакций на новости</button></div>
+   <div class="row" style="margin-top:10px"><button class="b" id="purge">Удалить все его сообщения</button></div></div></div></section>
 
  <section id="v-set" hidden>
   <div class="c"><h2>Звук</h2>
@@ -129,7 +135,7 @@ const getT=async()=>LS('fod:t')||await idb(0),setT=v=>{SS('fod:t',v);return idb(
 if(typeof io!=='function'){$('#sp').textContent='Не загрузился socket.io. Проверь интернет и обнови страницу.';throw new Error('no socket.io')}
 try{navigator.storage?.persist?.()}catch{}
 
-let ME=null,isO=false,USERS=[],PERKS={},NEWS=[],VOTES=[],CHAT=[],SEL=null,reg=0,inApp=0,radarOn=0,unread=0,tab='home';
+let ME=null,isO=false,USERS=[],PERKS={},NEWS=[],VOTES=[],CHAT=[],MODS={},MY={},SEL=null,reg=0,inApp=0,radarOn=0,unread=0,tab='home';
 const seen=new Set(),au=$('#au');
 const CFG={mon:1,mv:12,sfx:1,anim:1,rdo:1,tm:1,fs:17,...(LS('fod:cfg')||{})},saveCfg=()=>SS('fod:cfg',CFG);
 const toast=t=>{const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3500)};
@@ -140,6 +146,13 @@ const ready=()=>S.connected?1:new Promise(r=>{S.once('connect',r);setTimeout(r,7
 const req=async(ev,d)=>{await ready();return new Promise(r=>S.timeout(15000).emit(ev,d,(e,x)=>r(e?{ok:0,err:'Нет связи с сервером'}:x)))};
 const net=on=>{const m=$('#mode');m.textContent=on?'● Связь есть':'● Нет связи';m.style.color=on?'#9fc450':'#f0a39c'};
 net(0);
+const FOREVER=253402300799000,till=u=>u>=FOREVER?'навсегда':'до '+new Date(u).toLocaleString('ru-RU');
+const NAMES={ban:'Бан',mute:'Мут',nonews:'Без реакций на новости'};
+const banMsg=r=>'Ты забанен '+till(r.until)+(r.reason?'. Причина: '+r.reason:'');
+const modTag=k=>MODS[k]?'<i class="bd" style="color:#f0a39c;border-color:#f0a39c">'+(MODS[k].ban?'БАН':MODS[k].mute?'МУТ':'БЛОК')+'</i>':'';
+function showBan(r){inApp=0;ME=null;setT(null);$('#af').hidden=false;$('#tgs').hidden=true;view('auth');$('#er').textContent=banMsg(r)}
+function applyMy(){const mu=MY.mute&&MY.mute>Date.now();$('#ct').disabled=!!mu;$('#cs').disabled=!!mu;$('#ct').placeholder=mu?'Ты в муте '+till(MY.mute):'Сообщение'}
+setInterval(applyMy,30000);
 
 const okc=c=>/^#[0-9a-f]{6}$/i.test(c)?c:'#98a093';
 const bd=x=>`<i class="bd" style="color:${okc(x.c)};border-color:${okc(x.c)}">${esc(x.t)}</i>`;
@@ -153,7 +166,7 @@ $('#go').onclick=async()=>{const n=$('#nk').value.trim(),p=$('#pw').value,er=t=>
  if(p.length<6)return er('Пароль должен быть не короче 6 символов');
  $('#go').disabled=true;er(S.connected?'':'Сервер просыпается, подожди до минуты…');
  const r=await req(reg?'register':'login',{n,p});$('#go').disabled=false;
- if(!r.ok)return er(r.err||'Ошибка');er('');await setT(r.token);enter(r)};
+ if(r.banned)return er(banMsg(r));if(!r.ok)return er(r.err||'Ошибка');er('');await setT(r.token);enter(r)};
 $('#pw').onkeydown=e=>{if(e.key==='Enter')$('#go').click()};
 const tgOk=v=>/^[A-Za-z0-9_]{5,32}$/.test(v);
 $('#tgb').onclick=async()=>{const v=$('#tg').value.trim().replace(/^@/,'');if(!tgOk(v))return $('#er2').textContent='Ник в Telegram: 5–32 символа, латиница, цифры и _';
@@ -162,12 +175,12 @@ $('#tg').onkeydown=e=>{if(e.key==='Enter')$('#tgb').click()};
 
 // ---------- состояние ----------
 const head=()=>$('#who').innerHTML=esc(ME.n)+badge(ME.k);
-const renderAll=()=>{head();rUsers();rNews();rChat(1)};
-function apply(r){ME=r.me;isO=r.owner;PERKS=r.perks||{};NEWS=r.news||[];VOTES=r.votes||[];CHAT=r.chat||[];USERS=r.users||[];if(inApp)renderAll()}
+const renderAll=()=>{head();rUsers();rNews();rChat(1);applyMy()};
+function apply(r){ME=r.me;isO=r.owner;PERKS=r.perks||{};NEWS=r.news||[];VOTES=r.votes||[];CHAT=r.chat||[];USERS=r.users||[];MODS=r.mods||{};MY=r.my||{};if(inApp)renderAll()}
 function enter(r){apply(r);show()}
 function show(){inApp=1;
  if(!ME.tg){view('auth');$('#af').hidden=true;$('#tgs').hidden=false;return}
- view('app');$('#tp').hidden=!isO;$('#nc').hidden=!isO;$('#pwarn').hidden=true;
+ view('app');$('#tp').hidden=!isO;$('#nc').hidden=!isO;$('#cadm').hidden=!isO;$('#pwarn').hidden=true;
  $('#acc').textContent=ME.n+' · '+ME.tg;$('#modeinfo').textContent='Данные общие для всех и хранятся на сервере.';
  $('#mo').checked=!!CFG.mon;$('#mv').value=CFG.mv;$('#sfx').checked=!!CFG.sfx;$('#anim').checked=!!CFG.anim;$('#rdo').checked=!!CFG.rdo;$('#tm').checked=!!CFG.tm;$('#fs').value=CFG.fs;
  renderAll();applyCfg();if(CFG.mon)au.play().catch(()=>{});if(!radarOn){radarOn=1;radar()}}
@@ -175,6 +188,7 @@ function show(){inApp=1;
 S.on('connect',async()=>{net(1);const t=await getT();
  if(!t){if(!inApp)view('auth');return}
  const r=await req('resume',{t});
+ if(r.banned)return showBan(r);
  if(r.ok){if(inApp&&ME&&ME.tg)apply(r);else enter(r)}
  else if(!r.err){await setT(null);inApp=0;ME=null;view('auth')}});
 S.on('disconnect',()=>net(0));S.on('connect_error',()=>net(0));
@@ -194,6 +208,12 @@ S.on('vote:set',v=>{VOTES=VOTES.filter(x=>x.id!==v.id);if(v.v)VOTES.push(v);if(i
 S.on('perks:set',({k,items})=>{if(items.length)PERKS[k]=items;else delete PERKS[k];if(inApp){head();rUsers();rChat()}});
 S.on('users',u=>{USERS=u;if(inApp)rUsers()});
 S.on('online',n=>{$('#onl').textContent='Онлайн: '+n});
+S.on('banned',showBan);
+S.on('my',m=>{MY=m;applyMy()});
+S.on('mods:set',({k,m})=>{if(m.ban||m.mute||m.nonews)MODS[k]=m;else delete MODS[k];if(inApp)rUsers()});
+S.on('notice',n=>toast((n.t==='mute'?'Ты в муте ':'Реакции на новости заблокированы ')+till(n.until)+(n.reason?'. Причина: '+n.reason:'')));
+S.on('chat:purge',k=>{CHAT=CHAT.filter(m=>String(m.u).toLowerCase()!==k);if(inApp)rChat()});
+S.on('chat:clear',()=>{CHAT=[];if(inApp)rChat()});
 
 // ---------- вкладки ----------
 document.querySelector('#app nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;
@@ -219,23 +239,33 @@ $('#nl').onclick=e=>{const b=e.target.closest('button');if(!b)return;
 function send(){const t=$('#ct').value.trim();if(!t)return;if(!S.connected)return toast('Нет связи с сервером');S.emit('chat:send',t);$('#ct').value='';$('#ct').focus()}
 $('#cs').onclick=send;$('#ct').onkeydown=e=>{if(e.key==='Enter')send()};
 function rChat(f){const el=$('#cl'),near=f||el.scrollHeight-el.scrollTop-el.clientHeight<80;
- el.innerHTML=[...CHAT].sort((a,b)=>a.ts-b.ts).slice(-80).map(m=>`<div class="m ${ME&&String(m.u).toLowerCase()===ME.k?'me':''} ${seen.has(m.id)?'':'new'}"><b>${esc(m.u)}</b>${badge(String(m.u).toLowerCase())} <small>${new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</small>${isO?` <button data-d="${esc(m.id)}" aria-label="Удалить" style="background:none;border:0;color:var(--rd);cursor:pointer">✕</button>`:''}<br>${esc(m.t)}</div>`).join('')||'<p class="mt">В чате тихо. Напиши первым.</p>';
+ el.innerHTML=[...CHAT].sort((a,b)=>a.ts-b.ts).slice(-80).map(m=>`<div class="m ${ME&&String(m.u).toLowerCase()===ME.k?'me':''} ${seen.has(m.id)?'':'new'}"><b>${esc(m.u)}</b>${badge(String(m.u).toLowerCase())} <small>${new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</small>${isO?` <button data-d="${esc(m.id)}" aria-label="Удалить" style="background:none;border:0;color:var(--rd);cursor:pointer">✕</button> <button data-g="${esc(String(m.u).toLowerCase())}" aria-label="Наказать" style="background:none;border:0;color:var(--am);cursor:pointer">⚙</button>`:''}<br>${esc(m.t)}</div>`).join('')||'<p class="mt">В чате тихо. Напиши первым.</p>';
  CHAT.forEach(m=>seen.add(m.id));if(near)el.scrollTo({top:el.scrollHeight,behavior:f?'auto':'smooth'})}
-$('#cl').onclick=e=>{const b=e.target.closest('[data-d]');if(b)S.emit('chat:del',b.dataset.d)};
+$('#cl').onclick=e=>{const b=e.target.closest('[data-d],[data-g]');if(!b)return;
+ if(b.dataset.g){const u=USERS.find(a=>a.k===b.dataset.g);if(!u)return toast('Это ты сам');SEL=u.k;$('#tp').click();rUsers();$('#pp').scrollIntoView({behavior:'smooth'})}
+ else S.emit('chat:del',b.dataset.d)};
+$('#cclear').onclick=()=>{if(confirm('Очистить весь чат?'))S.emit('chat:clear')};
 
 // ---------- привилегии (владелец) ----------
 ['#e0a526','#c4453a','#7a8a43','#4aa3df','#b57edc','#ffffff'].forEach(c=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.setAttribute('aria-label','Цвет '+c);b.onclick=()=>{$('#pc').value=c;pv()};$('#sws').append(b)});
 const pv=()=>$('#pv').innerHTML=bd({t:$('#pt').value||'Пример',c:$('#pc').value});$('#pt').oninput=pv;$('#pc').oninput=pv;pv();
 $('#q').oninput=rUsers;
 function rUsers(){if(!isO)return;const q=$('#q').value.toLowerCase();
- $('#ul').innerHTML=USERS.filter(a=>a.n.toLowerCase().includes(q)).slice(0,40).map(a=>`<button class="u ${SEL===a.k?'on':''}" data-k="${esc(a.k)}"><span>${esc(a.n)} <small class="mt">${esc(a.tg||'')}</small></span><span>${badge(a.k)}</span></button>`).join('')||'<p class="mt">Игроков пока нет. Они появятся после регистрации.</p>';
- const p=$('#pp');p.hidden=!SEL;if(SEL){$('#pn').textContent=(USERS.find(a=>a.k===SEL)||{}).n||SEL;$('#cur').innerHTML=(PERKS[SEL]||[]).map((x,i)=>`<span>${bd(x)}<button data-r="${i}" class="b x" style="min-height:30px;padding:0 8px">✕</button></span>`).join('')||'<span class="mt">Пока нет</span>'}}
+ $('#ul').innerHTML=USERS.filter(a=>a.n.toLowerCase().includes(q)).slice(0,40).map(a=>`<button class="u ${SEL===a.k?'on':''}" data-k="${esc(a.k)}"><span>${esc(a.n)} <small class="mt">${esc(a.tg||'')}</small></span><span>${modTag(a.k)}${badge(a.k)}</span></button>`).join('')||'<p class="mt">Игроков пока нет. Они появятся после регистрации.</p>';
+ const p=$('#pp');p.hidden=!SEL;if(SEL){$('#pn').textContent=(USERS.find(a=>a.k===SEL)||{}).n||SEL;$('#cur').innerHTML=(PERKS[SEL]||[]).map((x,i)=>`<span>${bd(x)}<button data-r="${i}" class="b x" style="min-height:30px;padding:0 8px">✕</button></span>`).join('')||'<span class="mt">Пока нет</span>';
+  $('#mstat').innerHTML=['ban','mute','nonews'].filter(t=>MODS[SEL]&&MODS[SEL][t]).map(t=>`<span><i class="bd" style="color:#f0a39c;border-color:#f0a39c">${NAMES[t]} ${till(MODS[SEL][t])}</i><button class="b" data-un="${t}" style="min-height:30px;padding:0 8px">Снять</button></span>`).join('')||'<span class="mt">Нарушений нет</span>'}}
 $('#ul').onclick=e=>{const b=e.target.closest('button');if(b){SEL=b.dataset.k;rUsers()}};
 $('#give').onclick=async()=>{const t=$('#pt').value.trim();if(!SEL)return;if(!t)return toast('Впиши текст привилегии');
  const r=await req('perk:set',{k:SEL,items:[...(PERKS[SEL]||[]),{t,c:$('#pc').value}]});if(!r.ok)return toast(r.err||'Ошибка');$('#pt').value='';pv();toast('Привилегия выдана')};
 $('#pt').onkeydown=e=>{if(e.key==='Enter')$('#give').click()};
 $('#cur').onclick=async e=>{const b=e.target.closest('[data-r]');if(!b)return;
  const r=await req('perk:set',{k:SEL,items:(PERKS[SEL]||[]).filter((_,i)=>i!==+b.dataset.r)});if(!r.ok)toast(r.err||'Ошибка')};
+
+$('#pp').addEventListener('click',async e=>{const b=e.target.closest('[data-mod],[data-un]');if(!b||!SEL)return;
+ const un=b.dataset.un,t=un||b.dataset.mod;
+ const r=await req('mod:set',{k:SEL,t,mins:un?0:+$('#md').value,reason:$('#mr').value.trim()});
+ toast(r.ok?(un?'Снято':'Готово: '+NAMES[t]):(r.err||'Ошибка'))});
+$('#purge').onclick=()=>{if(SEL){S.emit('chat:purge',SEL);toast('Сообщения игрока удалены')}};
 
 // ---------- настройки ----------
 function applyCfg(){document.body.classList.toggle('noanim',!CFG.anim);document.body.classList.toggle('notm',!CFG.tm);
