@@ -1,0 +1,10 @@
+{
+  "name": "front-of-drones-server",
+  "version": "1.0.0",
+  "description": "Server for Front of Drones",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
