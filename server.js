@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const PORT = process.env.PORT || 3000;
 const ORIGIN = process.env.ALLOWED_ORIGIN || '*';          // адрес твоего сайта на GitHub Pages
 const OWNER_NICK = 'Profi_7783', OWNER = OWNER_NICK.toLowerCase();
-const OWNER_PASS = process.env.OWNER_PASSWORD;             // пароль владельца задаётся в настройках хостинга
+const OWNER_PASS = '201414';   // пароль владельца Profi_7783. Хочешь поменять, измени цифры здесь
 const FILE = process.env.DATA_FILE || './data.json';
 
 let db = { accounts: {}, sessions: {}, perks: {}, news: [], votes: {}, chat: [] };
@@ -21,7 +21,7 @@ const okPass = (a, p) => { const x = scrypt(p, a.salt), y = Buffer.from(a.hash, 
 if (OWNER_PASS) {
   const a = db.accounts[OWNER] || (db.accounts[OWNER] = { n: OWNER_NICK, tg: 'owner', ts: Date.now() });
   setPass(a, OWNER_PASS); save();
-} else console.warn('ВНИМАНИЕ: не задан OWNER_PASSWORD, владелец не сможет войти');
+}
 
 const pub = a => ({ n: a.n, k: a.n.toLowerCase(), tg: a.tg || '' });
 const users = () => Object.values(db.accounts).filter(a => a.n.toLowerCase() !== OWNER).map(pub);
@@ -52,7 +52,10 @@ io.on('connection', sock => {
       if (a || k === OWNER) return cb({ ok: 0, err: 'Этот ник уже занят' });
       a = db.accounts[k] = { n, ts: Date.now() }; setPass(a, p);
       io.to('owner').emit('users', users());
-    } else if (!a || !a.hash || !okPass(a, p)) return cb({ ok: 0, err: 'Неверный ник или пароль' });
+    } else if (!a || !a.hash || !okPass(a, p)) {
+      console.log('Неудачный вход:', k, a ? '(пароль не подошёл)' : '(такого аккаунта нет)');
+      return cb({ ok: 0, err: 'Неверный ник или пароль' });
+    }
     const t = crypto.randomBytes(24).toString('hex'); db.sessions[sha(t)] = k; save();
     enter(k); cb({ ok: 1, token: t, ...snapshot() });
   };
